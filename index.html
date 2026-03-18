@@ -24,7 +24,7 @@
 <body>
 
 <div class="container">
-    <h1>Débits des rivières (3 derniers jours)</h1>
+    <h1>Débits des rivières (Version Nettoyée)</h1>
     
     <div class="selector-group">
         <div class="control">
@@ -58,11 +58,11 @@
     <div id="date"></div>
     
     <div class="chart-box">
-        <div id="noData">Sélectionnez une station pour voir les données</div>
+        <div id="noData">Sélectionnez une station</div>
         <canvas id="graph"></canvas>
     </div>
 
-    <div class="footer">Données Hub'Eau • Actualisation auto 10 min</div>
+    <div class="footer">Filtrage : Captages, sources et stations inactives exclus.</div>
 </div>
 
 <script>
@@ -73,37 +73,40 @@ const DEBIT_HORS_ETIAGE = 1.55;
 const deptSelector = document.getElementById('deptSelector');
 const stationSelector = document.getElementById('stationSelector');
 
-// 1. CHARGEMENT SIMPLE ET ROBUSTE DES STATIONS
 deptSelector.addEventListener('change', function() {
     const codeDept = this.value;
     if (!codeDept) return;
 
     resetDisplay();
     stationSelector.disabled = true;
-    stationSelector.innerHTML = '<option>Chargement des stations...</option>';
+    stationSelector.innerHTML = '<option>Chargement...</option>';
 
-    // On revient sur le référentiel filtré par "En service" (le plus stable)
+    // REQUÊTE SIMPLE (pour éviter l'erreur réseau)
     const url = `https://hubeau.eaufrance.fr/api/v2/hydrometrie/referentiel/stations?code_departement=${codeDept}&en_service=true&format=json&size=600`;
 
     fetch(url).then(r => r.json()).then(json => {
-        if (!json.data || json.data.length === 0) {
-            stationSelector.innerHTML = '<option value="">Aucune station trouvée</option>';
-            return;
-        }
+        if (!json.data) return;
 
-        // Tri par libellé
-        const stations = json.data.sort((a, b) => (a.libelle_station || "").localeCompare(b.libelle_station || ""));
+        // FILTRE MANUEL EN JAVASCRIPT (Infaillible)
+        const stationsFiltrees = json.data.filter(s => {
+            const nom = (s.libelle_station || "").toLowerCase();
+            // On exclut les mots indésirables
+            const estIndesirable = nom.includes("captage") || 
+                                   nom.includes("source") || 
+                                   nom.includes("canal") || 
+                                   nom.includes("exhaure") ||
+                                   nom.includes("pumping");
+            return !estIndesirable;
+        }).sort((a, b) => a.libelle_station.localeCompare(b.libelle_station));
 
-        stationSelector.innerHTML = `<option value="">Choisir parmi ${stations.length} stations</option>`;
-        stations.forEach(s => {
+        stationSelector.innerHTML = `<option value="">Choisir parmi ${stationsFiltrees.length} stations</option>`;
+        stationsFiltrees.forEach(s => {
             let opt = document.createElement('option');
-            opt.value = s.code_site; // On utilise le code_site pour les observations TR
-            opt.text = s.libelle_station ? `${s.libelle_station} (${s.code_site})` : s.code_site;
+            opt.value = s.code_site;
+            opt.text = s.libelle_station;
             stationSelector.appendChild(opt);
         });
         stationSelector.disabled = false;
-    }).catch(err => {
-        stationSelector.innerHTML = '<option value="">Erreur de connexion</option>';
     });
 });
 
@@ -119,58 +122,44 @@ function resetDisplay() {
     document.getElementById("debit").innerText = "--";
     document.getElementById("date").innerText = "";
     document.getElementById('stationTitle').innerText = "";
-    document.getElementById('noData').style.display = 'block';
-    document.getElementById('noData').innerText = "Sélectionnez une station";
 }
 
 function updateData(codeSite) {
     const NB_JOURS = 3;
-    const maintenant = Date.now();
-    const limiteTemps = maintenant - NB_JOURS * 24 * 3600 * 1000;
-
+    const limite = Date.now() - NB_JOURS * 24 * 3600 * 1000;
     if (myChart) { myChart.destroy(); myChart = null; }
     document.getElementById('noData').style.display = 'none';
 
-    // Requêtes sur les observations TR (Grandeur Q obligatoire)
+    // On tente de récupérer le débit (Q)
     const URL_LIVE = `https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=${codeSite}&grandeur_hydro=Q&size=1&sort=DESC`;
     const URL_GRAPH = `https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=${codeSite}&grandeur_hydro=Q&size=2000&sort=DESC`;
 
-    // 1. Fetch Valeur Actuelle
     fetch(URL_LIVE).then(r => r.json()).then(json => {
         if (json.data && json.data.length > 0) {
             const obs = json.data[0];
-            const q_ls = Number(obs.resultat_obs);
-            const q_m3s = q_ls / 1000;
-            document.getElementById("debit").innerText = q_m3s >= 1 
-                ? q_m3s.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + " m³/s"
-                : Math.round(q_ls).toLocaleString("fr-FR") + " l/s";
-            document.getElementById("date").innerText = "Mesure du " + new Date(obs.date_obs).toLocaleString("fr-FR");
+            const q = Number(obs.resultat_obs);
+            document.getElementById("debit").innerText = q >= 1000 
+                ? (q/1000).toLocaleString("fr-FR", {minimumFractionDigits:3}) + " m³/s"
+                : Math.round(q).toLocaleString("fr-FR") + " l/s";
+            document.getElementById("date").innerText = "Dernière mesure : " + new Date(obs.date_obs).toLocaleString("fr-FR");
         } else {
-            document.getElementById("debit").innerText = "Indisponible";
-            document.getElementById("date").innerText = "Cette station ne transmet pas de débit (Q) actuellement.";
+            document.getElementById("debit").innerText = "Pas de débit";
+            document.getElementById("date").innerText = "Cette station ne mesure peut-être que la hauteur.";
         }
     });
 
-    // 2. Fetch Historique
     fetch(URL_GRAPH).then(r => r.json()).then(json => {
         if (!json.data || json.data.length === 0) {
-            document.getElementById('noData').innerText = "Aucun historique de débit disponible sur 3 jours";
             document.getElementById('noData').style.display = 'block';
+            document.getElementById('noData').innerText = "Aucun graphique de débit disponible";
             return;
         }
-
         const data = json.data
-            .filter(d => new Date(d.date_obs).getTime() >= limiteTemps)
+            .filter(d => new Date(d.date_obs).getTime() >= limite)
             .sort((a, b) => new Date(a.date_obs) - new Date(b.date_obs));
 
-        if (data.length === 0) {
-            document.getElementById('noData').innerText = "Pas de données récentes (dernières 72h)";
-            document.getElementById('noData').style.display = 'block';
-            return;
-        }
-
-        const labels = data.map(d => new Date(d.date_obs).toLocaleString("fr-FR", { day: "2-digit", hour: "2-digit", minute: "2-digit" }));
-        const serie = data.map(d => Number(d.resultat_obs) / 1000);
+        const labels = data.map(d => new Date(d.date_obs).toLocaleString("fr-FR", {day:"2-digit", hour:"2-digit", minute:"2-digit"}));
+        const values = data.map(d => Number(d.resultat_obs)/1000);
 
         const ctx = document.getElementById("graph").getContext("2d");
         myChart = new Chart(ctx, {
@@ -178,20 +167,12 @@ function updateData(codeSite) {
             data: {
                 labels,
                 datasets: [
-                    { label: "Débit (m³/s)", data: serie, borderColor: "#007bff", borderWidth: 2, tension: 0.35, pointRadius: 0, fill: false },
-                    { label: `Étiage`, data: labels.map(() => DEBIT_ETIAGE), borderColor: "#dc3545", borderDash: [5, 5], borderWidth: 1.5, pointRadius: 0 },
-                    { label: `Hors étiage`, data: labels.map(() => DEBIT_HORS_ETIAGE), borderColor: "#28a745", borderDash: [5, 5], borderWidth: 1.5, pointRadius: 0 }
+                    { label: "Débit (m³/s)", data: values, borderColor: "#007bff", borderWidth: 2, pointRadius: 0, fill: false, tension: 0.3 },
+                    { label: "Étiage", data: labels.map(()=>DEBIT_ETIAGE), borderColor: "#dc3545", borderDash: [5,5], borderWidth: 1, pointRadius: 0 },
+                    { label: "Hors étiage", data: labels.map(()=>DEBIT_HORS_ETIAGE), borderColor: "#28a745", borderDash: [5,5], borderWidth: 1, pointRadius: 0 }
                 ]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { ticks: { callback: v => v.toLocaleString("fr-FR") + " m³/s" } },
-                    x: { ticks: { maxTicksLimit: 7 } }
-                },
-                plugins: { legend: { position: 'bottom' } }
-            }
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
         });
     });
 }
