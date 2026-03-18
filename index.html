@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Débits Rivières ARA</title>
+    <title>Suivi Hydrométrique ARA</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -12,19 +12,19 @@
         h1 { font-size: 1.4rem; border-bottom: 2px solid #007bff; padding-bottom: 12px; text-align: center; margin-bottom: 25px; }
         .selector-group { display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; background: #fdfdfd; padding: 20px; border: 1px solid #eee; border-radius: 8px; }
         .control { flex: 1; min-width: 250px; }
-        label { display: block; margin-bottom: 8px; font-weight: 700; font-size: 0.85em; color: #444; text-transform: uppercase; letter-spacing: 0.5px; }
-        select { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; background-color: #fff; cursor: pointer; transition: border 0.2s; }
-        select:focus { border-color: #007bff; outline: none; }
-        #debit { font-size: 3.2em; font-weight: bold; color: #007bff; text-align: center; margin-top: 15px; }
-        #date { text-align: center; font-size: 0.9em; color: #777; margin-bottom: 25px; height: 1.2em; font-style: italic; }
-        .chart-container { position: relative; height: 400px; width: 100%; margin-top: 10px; }
+        label { display: block; margin-bottom: 8px; font-weight: 700; font-size: 0.85em; color: #444; text-transform: uppercase; }
+        select { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; background-color: #fff; }
+        #debit { font-size: 3.2em; font-weight: bold; color: #007bff; text-align: center; margin-top: 15px; min-height: 1.2em; }
+        #date { text-align: center; font-size: 0.9em; color: #777; margin-bottom: 25px; height: 1.2em; }
+        .chart-box { position: relative; height: 400px; width: 100%; border: 1px solid #f0f0f0; border-radius: 8px; }
+        .no-data-msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #999; font-style: italic; display: none; }
         .footer { margin-top: 30px; font-size: 0.75em; text-align: center; color: #999; border-top: 1px solid #eee; padding-top: 15px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Suivi des débits en temps réel (3 jours)</h1>
+    <h1>Débits des rivières en temps réel</h1>
     
     <div class="selector-group">
         <div class="control">
@@ -46,22 +46,23 @@
             </select>
         </div>
         <div class="control">
-            <label>Station de mesure</label>
+            <label>Station (actives uniquement)</label>
             <select id="stationSelector" disabled>
                 <option value="">Choisissez un département</option>
             </select>
         </div>
     </div>
 
-    <h2 id="stationTitle" style="text-align:center; font-size: 1.2em; color: #2c3e50;"></h2>
+    <h2 id="stationTitle" style="text-align:center; font-size: 1.1em; color: #34495e;"></h2>
     <div id="debit">--</div>
     <div id="date"></div>
     
-    <div class="chart-container">
+    <div class="chart-box">
+        <div id="noData" class="no-data-msg">Aucune donnée graphique sur les 3 derniers jours</div>
         <canvas id="graph"></canvas>
     </div>
 
-    <div class="footer">Source : API Hub'Eau Hydrométrie • Données actualisées toutes les 10 min</div>
+    <div class="footer">Source : Hub'Eau Hydrométrie • Actualisation auto 10 min</div>
 </div>
 
 <script>
@@ -72,52 +73,37 @@ const DEBIT_HORS_ETIAGE = 1.55;
 const deptSelector = document.getElementById('deptSelector');
 const stationSelector = document.getElementById('stationSelector');
 
-// 1. CHARGEMENT DES STATIONS FILTRÉES (ACTIVES UNIQUEMENT)
 deptSelector.addEventListener('change', function() {
     const codeDept = this.value;
     if (!codeDept) return;
 
+    resetDisplay();
     stationSelector.disabled = true;
-    stationSelector.innerHTML = '<option>Filtrage des stations actives...</option>';
+    stationSelector.innerHTML = '<option>Analyse des stations actives...</option>';
 
-    // FILTRE CRUCIAL : en_service=true ET grandeur_hydro=Q
-    // Cela élimine 80% des stations vides (anciennes ou météo uniquement)
-    const url = `https://hubeau.eaufrance.fr/api/v2/hydrometrie/referentiel/stations?code_departement=${codeDept}&en_service=true&grandeur_hydro=Q&format=json&size=600`;
+    // On cherche les stations en service qui ont produit du débit (Q) récemment
+    const url = `https://hubeau.eaufrance.fr/api/v2/hydrometrie/referentiel/stations?code_departement=${codeDept}&en_service=true&grandeur_hydro=Q&format=json&size=500`;
 
-    fetch(url)
-        .then(r => r.json())
-        .then(json => {
-            if (!json.data || json.data.length === 0) {
-                stationSelector.innerHTML = '<option value="">Aucune station active trouvée</option>';
-                return;
-            }
-
-            // On utilise libelle_station pour le nom
-            const stations = json.data
-                .sort((a, b) => a.libelle_station.localeCompare(b.libelle_station));
-
-            stationSelector.innerHTML = `<option value="">Choisir parmi ${stations.length} stations en service</option>`;
-            stations.forEach(s => {
-                let opt = document.createElement('option');
-                // Attention : pour les données TR, on utilise souvent le code_site (les 8 premiers caractères du code_station)
-                // Mais l'API TR accepte aussi le code_station. On reste sur le code_site pour la stabilité.
-                opt.value = s.code_site;
-                opt.text = `${s.libelle_station} (${s.code_site})`;
-                stationSelector.appendChild(opt);
-            });
-            stationSelector.disabled = false;
-        })
-        .catch(err => {
-            stationSelector.innerHTML = '<option value="">Erreur de chargement</option>';
+    fetch(url).then(r => r.json()).then(json => {
+        if (!json.data || json.data.length === 0) {
+            stationSelector.innerHTML = '<option value="">Aucune station active</option>';
+            return;
+        }
+        const stations = json.data.sort((a, b) => a.libelle_station.localeCompare(b.libelle_station));
+        stationSelector.innerHTML = `<option value="">Choisir parmi ${stations.length} stations</option>`;
+        stations.forEach(s => {
+            let opt = document.createElement('option');
+            opt.value = s.code_site;
+            opt.text = `${s.libelle_station} (${s.code_site})`;
+            stationSelector.appendChild(opt);
         });
+        stationSelector.disabled = false;
+    });
 });
 
 stationSelector.addEventListener('change', function() {
     const codeSite = this.value;
-    if (!codeSite) {
-        resetDisplay();
-        return;
-    }
+    if (!codeSite) { resetDisplay(); return; }
     document.getElementById('stationTitle').innerText = this.options[this.selectedIndex].text;
     updateData(codeSite);
 });
@@ -127,6 +113,7 @@ function resetDisplay() {
     document.getElementById("debit").innerText = "--";
     document.getElementById("date").innerText = "";
     document.getElementById('stationTitle').innerText = "";
+    document.getElementById('noData').style.display = 'none';
 }
 
 function updateData(codeSite) {
@@ -135,10 +122,12 @@ function updateData(codeSite) {
     const limiteTemps = maintenant - NB_JOURS * 24 * 3600 * 1000;
 
     if (myChart) { myChart.destroy(); myChart = null; }
+    document.getElementById('noData').style.display = 'none';
 
     const URL_LIVE = `https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=${codeSite}&grandeur_hydro=Q&size=1&sort=DESC`;
-    const URL_GRAPH = `https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=${codeSite}&grandeur_hydro=Q&size=1200&sort=DESC`;
+    const URL_GRAPH = `https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=${codeSite}&grandeur_hydro=Q&size=2000&sort=DESC`;
 
+    // 1. Valeur Temps Réel
     fetch(URL_LIVE).then(r => r.json()).then(json => {
         if (json.data && json.data.length > 0) {
             const obs = json.data[0];
@@ -150,18 +139,25 @@ function updateData(codeSite) {
             document.getElementById("date").innerText = "Mesure du " + new Date(obs.date_obs).toLocaleString("fr-FR");
         } else {
             document.getElementById("debit").innerText = "Indisponible";
-            document.getElementById("date").innerText = "La station ne transmet plus de données actuellement.";
+            document.getElementById("date").innerText = "Pas de mesure récente reçue.";
         }
     });
 
+    // 2. Graphique
     fetch(URL_GRAPH).then(r => r.json()).then(json => {
-        if (!json.data || json.data.length === 0) return;
+        if (!json.data || json.data.length === 0) {
+            document.getElementById('noData').style.display = 'block';
+            return;
+        }
 
         const data = json.data
             .filter(d => new Date(d.date_obs).getTime() >= limiteTemps)
             .sort((a, b) => new Date(a.date_obs) - new Date(b.date_obs));
 
-        if (data.length === 0) return;
+        if (data.length === 0) {
+            document.getElementById('noData').style.display = 'block';
+            return;
+        }
 
         const labels = data.map(d => new Date(d.date_obs).toLocaleString("fr-FR", { day: "2-digit", hour: "2-digit", minute: "2-digit" }));
         const serie = data.map(d => Number(d.resultat_obs) / 1000);
@@ -172,7 +168,7 @@ function updateData(codeSite) {
             data: {
                 labels,
                 datasets: [
-                    { label: "Débit (m³/s)", data: serie, borderColor: "#007bff", borderWidth: 2, tension: 0.3, pointRadius: 0, fill: false },
+                    { label: "Débit (m³/s)", data: serie, borderColor: "#007bff", borderWidth: 2, tension: 0.35, pointRadius: 0, fill: false },
                     { label: `Étiage`, data: labels.map(() => DEBIT_ETIAGE), borderColor: "#dc3545", borderDash: [5, 5], borderWidth: 1.5, pointRadius: 0 },
                     { label: `Hors étiage`, data: labels.map(() => DEBIT_HORS_ETIAGE), borderColor: "#28a745", borderDash: [5, 5], borderWidth: 1.5, pointRadius: 0 }
                 ]
