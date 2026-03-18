@@ -16,19 +16,19 @@
         select { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; background-color: #fff; }
         #debit { font-size: 3.2em; font-weight: bold; color: #007bff; text-align: center; margin-top: 15px; min-height: 1.2em; }
         #date { text-align: center; font-size: 0.9em; color: #777; margin-bottom: 25px; height: 1.2em; }
-        .chart-box { position: relative; height: 400px; width: 100%; border: 1px solid #f0f0f0; border-radius: 8px; }
-        .no-data-msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #999; font-style: italic; display: none; }
+        .chart-box { position: relative; height: 400px; width: 100%; border: 1px solid #f0f0f0; border-radius: 8px; background: #fafafa; }
+        #noData { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #666; font-style: italic; display: none; text-align: center; width: 80%; }
         .footer { margin-top: 30px; font-size: 0.75em; text-align: center; color: #999; border-top: 1px solid #eee; padding-top: 15px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Débits des rivières en temps réel</h1>
+    <h1>Débits des rivières (3 derniers jours)</h1>
     
     <div class="selector-group">
         <div class="control">
-            <label>Département</label>
+            <label>1. Département</label>
             <select id="deptSelector">
                 <option value="">-- Sélectionner --</option>
                 <option value="01">01 - Ain</option>
@@ -46,7 +46,7 @@
             </select>
         </div>
         <div class="control">
-            <label>Station (actives uniquement)</label>
+            <label>2. Station de mesure</label>
             <select id="stationSelector" disabled>
                 <option value="">Choisissez un département</option>
             </select>
@@ -58,11 +58,11 @@
     <div id="date"></div>
     
     <div class="chart-box">
-        <div id="noData" class="no-data-msg">Aucune donnée graphique sur les 3 derniers jours</div>
+        <div id="noData">Sélectionnez une station pour voir les données</div>
         <canvas id="graph"></canvas>
     </div>
 
-    <div class="footer">Source : Hub'Eau Hydrométrie • Actualisation auto 10 min</div>
+    <div class="footer">Données Hub'Eau • Actualisation auto 10 min</div>
 </div>
 
 <script>
@@ -73,31 +73,37 @@ const DEBIT_HORS_ETIAGE = 1.55;
 const deptSelector = document.getElementById('deptSelector');
 const stationSelector = document.getElementById('stationSelector');
 
+// 1. CHARGEMENT SIMPLE ET ROBUSTE DES STATIONS
 deptSelector.addEventListener('change', function() {
     const codeDept = this.value;
     if (!codeDept) return;
 
     resetDisplay();
     stationSelector.disabled = true;
-    stationSelector.innerHTML = '<option>Analyse des stations actives...</option>';
+    stationSelector.innerHTML = '<option>Chargement des stations...</option>';
 
-    // On cherche les stations en service qui ont produit du débit (Q) récemment
-    const url = `https://hubeau.eaufrance.fr/api/v2/hydrometrie/referentiel/stations?code_departement=${codeDept}&en_service=true&grandeur_hydro=Q&format=json&size=500`;
+    // On revient sur le référentiel filtré par "En service" (le plus stable)
+    const url = `https://hubeau.eaufrance.fr/api/v2/hydrometrie/referentiel/stations?code_departement=${codeDept}&en_service=true&format=json&size=600`;
 
     fetch(url).then(r => r.json()).then(json => {
         if (!json.data || json.data.length === 0) {
-            stationSelector.innerHTML = '<option value="">Aucune station active</option>';
+            stationSelector.innerHTML = '<option value="">Aucune station trouvée</option>';
             return;
         }
-        const stations = json.data.sort((a, b) => a.libelle_station.localeCompare(b.libelle_station));
+
+        // Tri par libellé
+        const stations = json.data.sort((a, b) => (a.libelle_station || "").localeCompare(b.libelle_station || ""));
+
         stationSelector.innerHTML = `<option value="">Choisir parmi ${stations.length} stations</option>`;
         stations.forEach(s => {
             let opt = document.createElement('option');
-            opt.value = s.code_site;
-            opt.text = `${s.libelle_station} (${s.code_site})`;
+            opt.value = s.code_site; // On utilise le code_site pour les observations TR
+            opt.text = s.libelle_station ? `${s.libelle_station} (${s.code_site})` : s.code_site;
             stationSelector.appendChild(opt);
         });
         stationSelector.disabled = false;
+    }).catch(err => {
+        stationSelector.innerHTML = '<option value="">Erreur de connexion</option>';
     });
 });
 
@@ -113,7 +119,8 @@ function resetDisplay() {
     document.getElementById("debit").innerText = "--";
     document.getElementById("date").innerText = "";
     document.getElementById('stationTitle').innerText = "";
-    document.getElementById('noData').style.display = 'none';
+    document.getElementById('noData').style.display = 'block';
+    document.getElementById('noData').innerText = "Sélectionnez une station";
 }
 
 function updateData(codeSite) {
@@ -124,10 +131,11 @@ function updateData(codeSite) {
     if (myChart) { myChart.destroy(); myChart = null; }
     document.getElementById('noData').style.display = 'none';
 
+    // Requêtes sur les observations TR (Grandeur Q obligatoire)
     const URL_LIVE = `https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=${codeSite}&grandeur_hydro=Q&size=1&sort=DESC`;
     const URL_GRAPH = `https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=${codeSite}&grandeur_hydro=Q&size=2000&sort=DESC`;
 
-    // 1. Valeur Temps Réel
+    // 1. Fetch Valeur Actuelle
     fetch(URL_LIVE).then(r => r.json()).then(json => {
         if (json.data && json.data.length > 0) {
             const obs = json.data[0];
@@ -139,13 +147,14 @@ function updateData(codeSite) {
             document.getElementById("date").innerText = "Mesure du " + new Date(obs.date_obs).toLocaleString("fr-FR");
         } else {
             document.getElementById("debit").innerText = "Indisponible";
-            document.getElementById("date").innerText = "Pas de mesure récente reçue.";
+            document.getElementById("date").innerText = "Cette station ne transmet pas de débit (Q) actuellement.";
         }
     });
 
-    // 2. Graphique
+    // 2. Fetch Historique
     fetch(URL_GRAPH).then(r => r.json()).then(json => {
         if (!json.data || json.data.length === 0) {
+            document.getElementById('noData').innerText = "Aucun historique de débit disponible sur 3 jours";
             document.getElementById('noData').style.display = 'block';
             return;
         }
@@ -155,6 +164,7 @@ function updateData(codeSite) {
             .sort((a, b) => new Date(a.date_obs) - new Date(b.date_obs));
 
         if (data.length === 0) {
+            document.getElementById('noData').innerText = "Pas de données récentes (dernières 72h)";
             document.getElementById('noData').style.display = 'block';
             return;
         }
