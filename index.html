@@ -21,6 +21,10 @@
     </div>
   </a>
 </header>
+<div class="mobile-menu-toggle">
+  ☰ Menu
+</div>
+
 
 <nav class="sub-nav">
   <a href=".">Accueil</a>
@@ -177,6 +181,14 @@ async function updateData(codeSite) {
         });
     } catch(e) { document.getElementById("debit").innerText = "Erreur"; }
 }
+</script>
+<script>
+  const toggle = document.querySelector('.mobile-menu-toggle');
+  const menu = document.querySelector('.sub-nav');
+
+  toggle.addEventListener('click', () => {
+    menu.classList.toggle('active');
+  });
 </script>
 </body>
 </html>
