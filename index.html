@@ -3,179 +3,179 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Débits Rivières ARA</title>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <title>Débits ARA - Défis Climat 2030</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { font-family: 'Montserrat', sans-serif; background: #f4f7f6; color: #2c3e50; margin: 0; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
-        h1 { font-size: 1.4rem; border-bottom: 2px solid #007bff; padding-bottom: 12px; text-align: center; margin-bottom: 25px; }
-        .selector-group { display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; background: #fdfdfd; padding: 20px; border: 1px solid #eee; border-radius: 8px; }
-        .control { flex: 1; min-width: 250px; }
-        label { display: block; margin-bottom: 8px; font-weight: 700; font-size: 0.85em; color: #444; text-transform: uppercase; }
-        select { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; background-color: #fff; }
-        #debit { font-size: 3.2em; font-weight: bold; color: #007bff; text-align: center; margin-top: 15px; min-height: 1.2em; }
-        #date { text-align: center; font-size: 0.9em; margin-bottom: 25px; height: 1.2em; }
-        .old-data { color: #dc3545; font-weight: bold; }
-        .chart-box { position: relative; height: 400px; width: 100%; border: 1px solid #f0f0f0; border-radius: 8px; background: #fafafa; }
-        #noData { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #666; font-style: italic; display: none; text-align: center; width: 80%; font-weight: bold; }
-        .footer { margin-top: 30px; font-size: 0.75em; text-align: center; color: #999; border-top: 1px solid #eee; padding-top: 15px; }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="cop.jpg" />
+	<link rel="stylesheet" href="style.css">
+
 </head>
 <body>
 
-<div class="container">
-    <h1>Débits des rivières (ARA)</h1>
-    <div class="selector-group">
-        <div class="control">
-            <label>1. Département</label>
-            <select id="deptSelector">
-                <option value="">-- Sélectionner --</option>
-                <option value="01">01 - Ain</option>
-                <option value="03">03 - Allier</option>
-                <option value="07">07 - Ardèche</option>
-                <option value="15">15 - Cantal</option>
-                <option value="26">26 - Drôme</option>
-                <option value="38">38 - Isère</option>
-                <option value="42">42 - Loire</option>
-                <option value="43">43 - Haute-Loire</option>
-                <option value="63">63 - Puy-de-Dôme</option>
-                <option value="69">69 - Rhône</option>
-                <option value="73">73 - Savoie</option>
-                <option value="74">74 - Haute-Savoie</option>
-            </select>
+<header class="site-header">
+  <a href="." class="header-link">
+    <img src="logo.png" alt="Logo" class="logo">
+    <div class="header-text">
+      <div class="header-title">Débits des cours d'eau</div>
+      <div class="header-subtitle">Auvergne-Rhône-Alpes</div>
+    </div>
+  </a>
+</header>
+
+<nav class="sub-nav">
+  <a href=".">Accueil</a>
+  <a href="sources.html">Sources</a>
+    <a href="mentions.html">Mentions</a>
+</nav>
+<div class="app-container">
+    <div class="main-content">
+        
+        <div class="sidebar">
+            <div class="control">
+                <label>1. Département</label>
+                <select id="deptSelector">
+                    <option value="">-- Sélectionner --</option>
+                    <option value="01">01 - Ain</option>
+                    <option value="03">03 - Allier</option>
+                    <option value="07">07 - Ardèche</option>
+                    <option value="15">15 - Cantal</option>
+                    <option value="26">26 - Drôme</option>
+                    <option value="38">38 - Isère</option>
+                    <option value="42">42 - Loire</option>
+                    <option value="43">43 - Haute-Loire</option>
+                    <option value="63">63 - Puy-de-Dôme</option>
+                    <option value="69">69 - Rhône</option>
+                    <option value="73">73 - Savoie</option>
+                    <option value="74">74 - Haute-Savoie</option>
+                </select>
+            </div>
+            
+            <div class="control">
+                <label>2. Station de mesure</label>
+                <select id="stationSelector" disabled>
+                    <option value="">Choisissez un département</option>
+                </select>
+            </div>
         </div>
-        <div class="control">
-            <label>2. Station de mesure</label>
-            <select id="stationSelector" disabled><option>Choisissez un département</option></select>
+
+        <div class="results-container">
+            <div id="placeholderMessage">Veuillez sélectionner une station pour afficher les données.</div>
+
+            <div id="resultsArea">
+                <h2 id="stationTitle" style="text-align:center;"></h2>
+                <div id="debit">--</div>
+                <div id="date"></div>
+                <div class="chart-box-clean">
+                    <canvas id="graph"></canvas>
+                </div>
+                 </div>
         </div>
     </div>
-    <h2 id="stationTitle" style="text-align:center; font-size: 1.1em; color: #34495e;"></h2>
-    <div id="debit">--</div>
-    <div id="date"></div>
-    <div class="chart-box">
-        <div id="noData">Veuillez sélectionner une station</div>
-        <canvas id="graph"></canvas>
-    </div>
-    <div class="footer">Note : Certaines stations ne mesurent que la hauteur d'eau (pas de débit).</div>
 </div>
+
+<footer class="footer">
+    <div class="footer-content">
+        <div class="footer-top">
+            <a href="." class="footer-logo-link"><img src="logo2.jpg" alt="Logo gauche" class="footer-logo"></a>
+            <div class="footer-text-block">
+                    </div>
+        </div>
+        <div class="footer-bottom">
+            <a href="mentions.html" class="footer-mentions">Mentions légales</a>
+            <p class="footer-license">Sauf mention explicite de propriété intellectuelle détenue par des tiers, les contenus de ce site sont proposés sous <a href="https://www.etalab.gouv.fr/licence-ouverte-open-licence/">Licence Ouverte Version 2.0</a>.</p>
+        </div>
+    </div>
+</footer>
 
 <script>
 let myChart = null;
-const DEBIT_ETIAGE = 0.3047;   
-const DEBIT_HORS_ETIAGE = 1.55; 
+const DEBIT_ETIAGE = 0;   
+const DEBIT_HORS_ETIAGE = 0; 
 
 const deptSelector = document.getElementById('deptSelector');
 const stationSelector = document.getElementById('stationSelector');
+const resultsArea = document.getElementById('resultsArea');
+const placeholderMessage = document.getElementById('placeholderMessage');
 
 deptSelector.addEventListener('change', function() {
-    const codeDept = this.value;
-    if (!codeDept) return;
-    resetDisplay();
+    resultsArea.style.display = 'none';
+    placeholderMessage.style.display = 'block';
+    if (!this.value) {
+        stationSelector.disabled = true;
+        stationSelector.innerHTML = '<option value="">Choisissez un département</option>';
+        return;
+    }
+    chargerStations(this.value);
+});
+
+async function chargerStations(codeDept) {
     stationSelector.disabled = true;
-    stationSelector.innerHTML = '<option>Chargement des stations...</option>';
-
-    // REQUÊTE RÉFÉRENTIEL SIMPLE (Infaillible)
-    fetch(`https://hubeau.eaufrance.fr/api/v2/hydrometrie/referentiel/stations?code_departement=${codeDept}&en_service=true&format=json&size=600`)
-    .then(r => r.json()).then(json => {
-        if (!json.data) {
-            stationSelector.innerHTML = '<option>Erreur API</option>';
-            return;
-        }
-
-        // Filtre manuel par mots-clés pour nettoyer la liste
+    stationSelector.innerHTML = '<option>Chargement...</option>';
+    try {
+        const r = await fetch(`https://hubeau.eaufrance.fr/api/v2/hydrometrie/referentiel/stations?code_departement=${codeDept}&en_service=true&format=json&size=600`);
+        const json = await r.json();
         const stations = json.data.filter(s => {
             const nom = (s.libelle_station || "").toLowerCase();
-            const exclus = ["captage", "source", "canal", "exhaure", "ratier", "charbonnières", "pumping", "belley", "chazey", "forage"];
+            const exclus = ["captage", "source", "canal", "exhaure", "ratier", "charbonnières", "vézy", "pâle", "herbasse", "bezo", "singles", "vallières", "bassignac", "mieussy", "saussaz", "ponserand", "gouilles", "bettaix", "cruseilles", "sallanches", "nant", "jalonne", "cisalb", "aiguille", "malgovert", "gand", "ancienne", "chavort", "symbhi", "maurice", "jeures", "feuillée", "charrière", "goudet", "basset", "échelle", "usine", "blannat", "hermillon", "balbigny", "orelle", "feurs", "bessans", "barraux", "gavet", "corps", "vénéon", "bourget", "bancel" , "olle", "crolles", "retenue", "cnr", "rd139", "lez", "duy", "hameau", "livron", "dérivation", "besayes", "chavanon", "creuzier", "dorson", "coronne", "couleures", "drix", "herin", "monteux", "glun", "mollans", "ecoutay", "valloire", "talissieu", "constant", "souq", "moulin", "smbvd", "voulte", "leynhac", "ruisseau", "banne", "qnr", "empurany", "rochepaule", "passerelle", "supprimer", "ceyzérieu", "pumping", "bognes", "gland", "belley", "furans", "trévoux", "vitesse", "viret", "julien", "blancherie", "test", "chazey", "digue", "forage"];
             return !exclus.some(m => nom.includes(m));
         }).sort((a, b) => a.libelle_station.localeCompare(b.libelle_station));
 
-        stationSelector.innerHTML = `<option value="">Choisir parmi ${stations.length} stations</option>`;
+        stationSelector.innerHTML = '<option value="">-- Choisir une station --</option>';
         stations.forEach(s => {
             let opt = document.createElement('option');
-            opt.value = s.code_site;
+            opt.value = s.code_station || s.code_site;
             opt.text = s.libelle_station;
             stationSelector.appendChild(opt);
         });
         stationSelector.disabled = false;
-    }).catch(() => {
-        stationSelector.innerHTML = '<option>Erreur de connexion</option>';
-    });
-});
+    } catch(e) { stationSelector.innerHTML = '<option>Erreur</option>'; }
+}
 
 stationSelector.addEventListener('change', function() {
-    if (this.value) {
-        document.getElementById('stationTitle').innerText = this.options[this.selectedIndex].text;
-        updateData(this.value);
-    } else {
-        resetDisplay();
+    if (!this.value) {
+        resultsArea.style.display = 'none';
+        placeholderMessage.style.display = 'block';
+        return;
     }
+    placeholderMessage.style.display = 'none';
+    resultsArea.style.display = 'block';
+    document.getElementById('stationTitle').innerText = this.options[this.selectedIndex].text;
+    updateData(this.value);
 });
-
-function resetDisplay() {
-    if (myChart) { myChart.destroy(); myChart = null; }
-    document.getElementById("debit").innerText = "--";
-    document.getElementById("date").innerText = "";
-    document.getElementById('noData').style.display = 'block';
-    document.getElementById('noData').innerText = "Veuillez sélectionner une station";
-}
 
 async function updateData(codeSite) {
     if (myChart) { myChart.destroy(); myChart = null; }
-    document.getElementById('noData').style.display = 'none';
     document.getElementById("debit").innerText = "Chargement...";
-
     try {
-        // On récupère les 1000 derniers points (pour avoir de l'historique même si station lente)
-        const resp = await fetch(`https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=${codeSite}&grandeur_hydro=Q&size=1000&sort=DESC`);
+        const resp = await fetch(`https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=${codeSite}&grandeur_hydro=Q&size=100&sort=DESC`);
         const json = await resp.json();
-        
         if (!json.data || json.data.length === 0) {
-            document.getElementById("debit").innerText = "Indisponible";
-            document.getElementById("date").innerText = "";
-            document.getElementById('noData').style.display = 'block';
-            document.getElementById('noData').innerText = "Cette station ne transmet pas de débit (Q), seulement la hauteur.";
+            document.getElementById("debit").innerText = "Débit indisponible";
             return;
         }
-
         const data = json.data.sort((a, b) => new Date(a.date_obs) - new Date(b.date_obs));
         const lastObs = data[data.length - 1];
-        const dateObs = new Date(lastObs.date_obs);
-        const q_m3s = Number(lastObs.resultat_obs) / 1000;
-        
-        // Affichage du gros chiffre
-        document.getElementById("debit").innerText = q_m3s.toLocaleString("fr-FR", { minimumFractionDigits: 3 }) + " m³/s";
-        
-        // Affichage de la date
-        const diffHeures = (Date.now() - dateObs.getTime()) / (1000 * 3600);
-        const dateDiv = document.getElementById("date");
-        dateDiv.innerText = "Mesure du " + dateObs.toLocaleString("fr-FR");
-        dateDiv.className = diffHeures > 48 ? "old-data" : "";
-
-        // Graphique
-        const labels = data.map(d => new Date(d.date_obs).toLocaleString("fr-FR", {day:"2-digit", hour:"2-digit", minute:"2-digit"}));
-        const values = data.map(d => Number(d.resultat_obs)/1000);
+        document.getElementById("debit").innerText = (Number(lastObs.resultat_obs)/1000).toLocaleString("fr-FR", {minimumFractionDigits:3}) + " m³/s";
+        document.getElementById("date").innerText = "Mesure du " + new Date(lastObs.date_obs).toLocaleString("fr-FR");
 
         const ctx = document.getElementById("graph").getContext("2d");
         myChart = new Chart(ctx, {
             type: "line",
             data: {
-                labels,
-                datasets: [{ 
-                    label: "Débit (m³/s)", data: values, borderColor: "#007bff", borderWidth: 2, pointRadius: 0, fill: false, tension: 0.1 
-                },
-                { label: "Étiage", data: labels.map(()=>DEBIT_ETIAGE), borderColor: "#dc3545", borderDash: [5,5], borderWidth: 1, pointRadius: 0 },
-                { label: "Hors étiage", data: labels.map(()=>DEBIT_HORS_ETIAGE), borderColor: "#28a745", borderDash: [5,5], borderWidth: 1, pointRadius: 0 }]
+                labels: data.map(d => new Date(d.date_obs).toLocaleString("fr-FR", {day:"2-digit", hour:"2-digit"})),
+                datasets: [
+                    { label: "Débit actuel", data: data.map(d => Number(d.resultat_obs)/1000), borderColor: "#007bff", borderWidth: 2, pointRadius: 0, fill: false },
+                    { label: "Seuil Étiage", data: data.map(()=>DEBIT_ETIAGE), borderColor: "#dc3545", borderDash: [5,5], borderWidth: 1, pointRadius: 0 },
+                    { label: "Seuil Hors étiage", data: data.map(()=>DEBIT_HORS_ETIAGE), borderColor: "#28a745", borderDash: [5,5], borderWidth: 1, pointRadius: 0 }
+                ]
             },
             options: { 
-                responsive: true, maintainAspectRatio: false,
-                scales: { y: { ticks: { callback: v => v.toLocaleString("fr-FR") + " m³/s" } } },
-                plugins: { legend: { position: 'bottom' } } 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { legend: { display: true, position: 'bottom' } }
             }
         });
-    } catch(e) { 
-        document.getElementById("debit").innerText = "Erreur";
-    }
+    } catch(e) { document.getElementById("debit").innerText = "Erreur"; }
 }
 </script>
 </body>
